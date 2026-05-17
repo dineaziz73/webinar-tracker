@@ -1,5 +1,2 @@
-import ClientView from "../../components/ClientView";
-
-export default function ClientPage() {
-  return <ClientView />;
-}
+"use client";
+export { default } from "../../components/ClientView";
