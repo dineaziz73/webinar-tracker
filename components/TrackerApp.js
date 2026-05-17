@@ -3,13 +3,15 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { getLastSwitch, getNextSwitch, formatDuration, fmt, fmtNum, pct } from "../lib/utils";
 
-function Delta({ current, prev }) {
+// ─── Atoms ────────────────────────────────────────────────────────────────────
+
+function Delta({ current, prev, inverse }) {
   const d = pct(current, prev);
   if (d === null) return null;
-  const up = d >= 0;
+  const positive = inverse ? d <= 0 : d >= 0;
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: up ? "#4ade80" : "#f87171", background: up ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", padding: "2px 8px", borderRadius: 100 }}>
-      {up ? "▲" : "▼"} {Math.abs(d).toFixed(1)}%
+    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: positive ? "#4ade80" : "#f87171", background: positive ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", padding: "2px 8px", borderRadius: 100 }}>
+      {d >= 0 ? "▲" : "▼"} {Math.abs(d).toFixed(1)}%
     </span>
   );
 }
@@ -23,13 +25,13 @@ function Bar({ value, max }) {
   );
 }
 
-function Card({ label, value, highlight, delta, prev }) {
+function Card({ label, value, highlight, delta, prev, inverse }) {
   return (
     <div style={{ background: highlight ? "#F5C518" : "#111", border: highlight ? "none" : "1px solid #1e1e1e", borderRadius: 18, padding: "22px 18px", display: "flex", flexDirection: "column", gap: 8, position: "relative", overflow: "hidden" }}>
       {highlight && <div style={{ position: "absolute", top: -30, right: -30, width: 100, height: 100, background: "rgba(0,0,0,0.06)", borderRadius: "50%" }} />}
       <span style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", color: highlight ? "#000000aa" : "#555", fontWeight: 700 }}>{label}</span>
       <span style={{ fontSize: 28, fontWeight: 900, color: highlight ? "#000" : "#fff", lineHeight: 1, fontFamily: "monospace" }}>{value}</span>
-      {delta !== undefined && prev !== undefined && <Delta current={delta} prev={prev} />}
+      {delta !== undefined && prev !== undefined && <Delta current={delta} prev={prev} inverse={inverse} />}
     </div>
   );
 }
@@ -39,10 +41,8 @@ function Card({ label, value, highlight, delta, prev }) {
 function BaselineForm({ onSave, saving }) {
   const [spend, setSpend] = useState("");
   const [inscrits, setInscrits] = useState("");
-
   const inputStyle = { background: "#0d0d0d", border: "1px solid #333", borderRadius: 10, padding: "14px 16px", color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: "monospace", outline: "none", width: "100%" };
   const valid = spend && inscrits && !isNaN(parseFloat(spend)) && !isNaN(parseInt(inscrits));
-
   return (
     <div style={{ background: "#0d1500", border: "1px solid #1a3000", borderRadius: 20, padding: 24, marginBottom: 24 }}>
       <div style={{ color: "#F5C518", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8, fontWeight: 700 }}>📍 Point de départ</div>
@@ -60,11 +60,8 @@ function BaselineForm({ onSave, saving }) {
           <input style={inputStyle} type="number" placeholder="ex: 430" value={inscrits} onChange={e => setInscrits(e.target.value)} />
         </div>
       </div>
-      <button
-        onClick={() => valid && !saving && onSave({ baseline_spend: parseFloat(spend.replace(",", ".")), baseline_inscrits: parseInt(inscrits) })}
-        disabled={!valid || saving}
-        style={{ background: valid && !saving ? "#F5C518" : "#1a1a1a", color: valid && !saving ? "#000" : "#333", border: "none", borderRadius: 12, padding: "14px 24px", fontWeight: 800, fontSize: 14, cursor: valid && !saving ? "pointer" : "default", fontFamily: "monospace", letterSpacing: 1, width: "100%", transition: "all 0.2s" }}
-      >
+      <button onClick={() => valid && !saving && onSave({ baseline_spend: parseFloat(spend.replace(",", ".")), baseline_inscrits: parseInt(inscrits) })} disabled={!valid || saving}
+        style={{ background: valid && !saving ? "#F5C518" : "#1a1a1a", color: valid && !saving ? "#000" : "#333", border: "none", borderRadius: 12, padding: "14px 24px", fontWeight: 800, fontSize: 14, cursor: valid && !saving ? "pointer" : "default", fontFamily: "monospace", letterSpacing: 1, width: "100%", transition: "all 0.2s" }}>
         {saving ? "Enregistrement..." : "Définir le point de départ →"}
       </button>
     </div>
@@ -77,7 +74,6 @@ function UpdateForm({ onUpdate, currentData, baseline, saving }) {
   const [spend, setSpend] = useState("");
   const [inscrits, setInscrits] = useState("");
   const [note, setNote] = useState("");
-
   const bSpend = baseline?.baseline_spend || 0;
   const bInscrits = baseline?.baseline_inscrits || 0;
 
@@ -89,52 +85,50 @@ function UpdateForm({ onUpdate, currentData, baseline, saving }) {
   }, [currentData]);
 
   const inputStyle = { background: "#0d0d0d", border: "1px solid #222", borderRadius: 10, padding: "14px 16px", color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: "monospace", outline: "none", width: "100%" };
-
   const spendVal = parseFloat(spend.replace(",", "."));
   const inscritsVal = parseInt(inscrits);
   const valid = spend && inscrits && !isNaN(spendVal) && !isNaN(inscritsVal) && spendVal >= bSpend && inscritsVal >= bInscrits;
   const netSpend = valid ? spendVal - bSpend : null;
   const netInscrits = valid ? inscritsVal - bInscrits : null;
 
+  const handleSubmit = () => {
+    if (!valid || saving) return;
+    onUpdate({ spend: netSpend, inscrits: netInscrits, note });
+    setNote("");
+  };
+
   return (
     <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 20, padding: 24, marginBottom: 24 }}>
       <div style={{ color: "#F5C518", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8, fontWeight: 700 }}>✏ Mettre à jour</div>
-      <p style={{ color: "#444", fontSize: 11, fontFamily: "monospace", marginBottom: 16, lineHeight: 1.6 }}>
-        Saisis le <strong style={{ color: "#666" }}>total brut affiché dans Meta</strong> en ce moment. Le calcul depuis le switch est automatique.
-      </p>
+      <p style={{ color: "#444", fontSize: 11, fontFamily: "monospace", marginBottom: 16, lineHeight: 1.6 }}>Saisis le <strong style={{ color: "#666" }}>total brut affiché dans Meta</strong> en ce moment. Le calcul depuis le switch est automatique.</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div>
           <label style={{ color: "#555", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", display: "block", marginBottom: 6 }}>Total brut Meta (CHF)</label>
           <input style={inputStyle} type="number" placeholder={`min. ${bSpend}`} value={spend} onChange={e => setSpend(e.target.value)} />
-          {netSpend !== null && netSpend >= 0 && (
-            <div style={{ color: "#F5C518", fontSize: 11, fontFamily: "monospace", marginTop: 6 }}>→ Depuis switch : {fmt(netSpend)}</div>
-          )}
+          {netSpend !== null && netSpend >= 0 && <div style={{ color: "#F5C518", fontSize: 11, fontFamily: "monospace", marginTop: 6 }}>→ Depuis switch : {fmt(netSpend)}</div>}
         </div>
         <div>
           <label style={{ color: "#555", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", display: "block", marginBottom: 6 }}>Total brut inscrits</label>
           <input style={inputStyle} type="number" placeholder={`min. ${bInscrits}`} value={inscrits} onChange={e => setInscrits(e.target.value)} />
-          {netInscrits !== null && netInscrits >= 0 && (
-            <div style={{ color: "#F5C518", fontSize: 11, fontFamily: "monospace", marginTop: 6 }}>→ Depuis switch : {fmtNum(netInscrits)}</div>
-          )}
+          {netInscrits !== null && netInscrits >= 0 && <div style={{ color: "#F5C518", fontSize: 11, fontFamily: "monospace", marginTop: 6 }}>→ Depuis switch : {fmtNum(netInscrits)}</div>}
         </div>
       </div>
       <input style={{ ...inputStyle, fontSize: 13, fontWeight: 400, marginBottom: 12 }} placeholder="Note optionnelle" value={note} onChange={e => setNote(e.target.value)} />
-      <button
-        onClick={() => valid && !saving && onUpdate({ spend: netSpend, inscrits: netInscrits, note }) && setNote("")}
-        disabled={!valid || saving}
-        style={{ background: valid && !saving ? "#F5C518" : "#1a1a1a", color: valid && !saving ? "#000" : "#333", border: "none", borderRadius: 12, padding: "14px 24px", fontWeight: 800, fontSize: 14, cursor: valid && !saving ? "pointer" : "default", fontFamily: "monospace", letterSpacing: 1, width: "100%", transition: "all 0.2s" }}
-      >
+      <button onClick={handleSubmit} disabled={!valid || saving}
+        style={{ background: valid && !saving ? "#F5C518" : "#1a1a1a", color: valid && !saving ? "#000" : "#333", border: "none", borderRadius: 12, padding: "14px 24px", fontWeight: 800, fontSize: 14, cursor: valid && !saving ? "pointer" : "default", fontFamily: "monospace", letterSpacing: 1, width: "100%", transition: "all 0.2s" }}>
         {saving ? "Enregistrement..." : "Enregistrer →"}
       </button>
     </div>
   );
 }
 
+// ─── Historique des mises à jour ─────────────────────────────────────────────
+
 function Historique({ logs }) {
   if (!logs || logs.length === 0) return null;
   return (
     <div style={{ marginTop: 24 }}>
-      <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 12 }}>Historique</div>
+      <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 12 }}>Historique des mises à jour</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {[...logs].reverse().slice(0, 6).map((l, i) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0a0a0a", border: "1px solid #141414", borderRadius: 10, padding: "10px 14px", flexWrap: "wrap", gap: 4 }}>
@@ -149,6 +143,8 @@ function Historique({ logs }) {
     </div>
   );
 }
+
+// ─── Modal Switch ─────────────────────────────────────────────────────────────
 
 function SwitchModal({ currentData, cpl, onConfirm, onCancel, saving }) {
   return (
@@ -172,7 +168,153 @@ function SwitchModal({ currentData, cpl, onConfirm, onCancel, saving }) {
   );
 }
 
+// ─── Vue Historique Cohortes ──────────────────────────────────────────────────
+
+function VueHistorique({ onBack }) {
+  const [cohortes, setCohortes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      // Charger toutes les cohortes inactives + active
+      const { data: allCohorts } = await supabase
+        .from("cohorts")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!allCohorts) { setLoading(false); return; }
+
+      // Pour chaque cohorte, récupérer le dernier update
+      const enriched = await Promise.all(allCohorts.map(async (c) => {
+        const { data: updates } = await supabase
+          .from("updates")
+          .select("*")
+          .eq("cohort_id", c.id)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        return { ...c, lastUpdate: updates?.[0] || null };
+      }));
+
+      setCohortes(enriched);
+      setLoading(false);
+    })();
+  }, []);
+
+  const withData = cohortes.filter(c => c.lastUpdate);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#080808" }}>
+      {/* Header */}
+      <div style={{ borderBottom: "1px solid #111", padding: "18px 24px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, background: "#080808", zIndex: 10 }}>
+        <button onClick={onBack} style={{ background: "#111", border: "1px solid #1e1e1e", color: "#888", borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontFamily: "monospace" }}>← Retour</button>
+        <div>
+          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, fontFamily: "monospace" }}>Historique des semaines</div>
+          <div style={{ color: "#2a2a2a", fontSize: 10, fontFamily: "monospace" }}>{withData.length} semaine{withData.length > 1 ? "s" : ""} archivée{withData.length > 1 ? "s" : ""}</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Chargement...</div>
+        ) : withData.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Aucune semaine archivée pour l'instant.</div>
+        ) : (
+          <>
+            {/* Tableau récap */}
+            <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 16, overflow: "hidden", marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "12px 16px", borderBottom: "1px solid #1a1a1a" }}>
+                {["Semaine", "Spend", "Inscrits", "CPL"].map(h => (
+                  <div key={h} style={{ color: "#333", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 700 }}>{h}</div>
+                ))}
+              </div>
+              {withData.map((c, i) => {
+                const next = withData[i + 1];
+                const cpl = c.lastUpdate?.spend > 0 && c.lastUpdate?.inscrits > 0 ? c.lastUpdate.spend / c.lastUpdate.inscrits : 0;
+                const prevCpl = next?.lastUpdate?.spend > 0 && next?.lastUpdate?.inscrits > 0 ? next.lastUpdate.spend / next.lastUpdate.inscrits : 0;
+                const start = new Date(c.created_at);
+                const end = new Date(start); end.setDate(end.getDate() + 7);
+                const label = `${start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} → ${end.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`;
+                return (
+                  <div key={c.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "14px 16px", borderBottom: i < withData.length - 1 ? "1px solid #111" : "none", background: c.active ? "rgba(245,197,24,0.04)" : "transparent" }}>
+                    <div>
+                      <div style={{ color: c.active ? "#F5C518" : "#fff", fontSize: 12, fontFamily: "monospace", fontWeight: 700 }}>{label}</div>
+                      {c.active && <span style={{ fontSize: 9, color: "#F5C518", background: "rgba(245,197,24,0.1)", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace", letterSpacing: 1 }}>EN COURS</span>}
+                    </div>
+                    <div>
+                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{fmt(c.lastUpdate?.spend || 0)}</div>
+                      {next?.lastUpdate && <Delta current={c.lastUpdate?.spend} prev={next.lastUpdate?.spend} />}
+                    </div>
+                    <div>
+                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{fmtNum(c.lastUpdate?.inscrits || 0)}</div>
+                      {next?.lastUpdate && <Delta current={c.lastUpdate?.inscrits} prev={next.lastUpdate?.inscrits} />}
+                    </div>
+                    <div>
+                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{cpl > 0 ? fmt(cpl) : "—"}</div>
+                      {next?.lastUpdate && prevCpl > 0 && <Delta current={cpl} prev={prevCpl} inverse />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Cards détail par semaine */}
+            <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 16 }}>Détail par semaine</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {withData.map((c, i) => {
+                const next = withData[i + 1];
+                const cpl = c.lastUpdate?.spend > 0 && c.lastUpdate?.inscrits > 0 ? c.lastUpdate.spend / c.lastUpdate.inscrits : 0;
+                const prevCpl = next?.lastUpdate?.spend > 0 && next?.lastUpdate?.inscrits > 0 ? next.lastUpdate.spend / next.lastUpdate.inscrits : 0;
+                const start = new Date(c.created_at);
+                const end = new Date(start); end.setDate(end.getDate() + 7);
+
+                return (
+                  <div key={c.id} style={{ background: "#0d0d0d", border: c.active ? "1px solid #2a2a00" : "1px solid #1a1a1a", borderRadius: 16, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <div style={{ color: c.active ? "#F5C518" : "#fff", fontWeight: 800, fontFamily: "monospace", fontSize: 14 }}>
+                          {start.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                        </div>
+                        <div style={{ color: "#333", fontSize: 11, fontFamily: "monospace", marginTop: 2 }}>
+                          → {end.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} 17h00
+                        </div>
+                      </div>
+                      {c.active && (
+                        <span style={{ fontSize: 10, color: "#F5C518", background: "rgba(245,197,24,0.1)", padding: "4px 10px", borderRadius: 6, fontFamily: "monospace", letterSpacing: 1, fontWeight: 700 }}>EN COURS</span>
+                      )}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      {[
+                        { label: "Spend", value: fmt(c.lastUpdate?.spend || 0), curr: c.lastUpdate?.spend, prev: next?.lastUpdate?.spend },
+                        { label: "Inscrits", value: fmtNum(c.lastUpdate?.inscrits || 0), curr: c.lastUpdate?.inscrits, prev: next?.lastUpdate?.inscrits },
+                        { label: "CPL", value: cpl > 0 ? fmt(cpl) : "—", curr: cpl, prev: prevCpl, inverse: true },
+                      ].map(({ label, value, curr, prev, inverse }) => (
+                        <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "14px 12px" }}>
+                          <div style={{ color: "#444", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 6 }}>{label}</div>
+                          <div style={{ color: "#fff", fontWeight: 800, fontFamily: "monospace", fontSize: 16, marginBottom: 6 }}>{value}</div>
+                          {prev !== undefined && prev > 0 && <Delta current={curr} prev={prev} inverse={inverse} />}
+                        </div>
+                      ))}
+                    </div>
+
+                    {c.lastUpdate?.note && (
+                      <div style={{ marginTop: 12, color: "#444", fontSize: 11, fontFamily: "monospace" }}>📝 {c.lastUpdate.note}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── App principale ───────────────────────────────────────────────────────────
+
 export default function TrackerApp() {
+  const [view, setView] = useState("dashboard"); // "dashboard" | "historique"
   const [currentData, setCurrentData] = useState(null);
   const [baseline, setBaseline] = useState(null);
   const [prevWeek, setPrevWeek] = useState(null);
@@ -195,7 +337,6 @@ export default function TrackerApp() {
       const { data: cohorts, error: ce } = await supabase.from("cohorts").select("*").eq("active", true).order("created_at", { ascending: false }).limit(1);
       if (ce) throw ce;
       const { data: prevCohorts } = await supabase.from("cohorts").select("*").eq("active", false).order("created_at", { ascending: false }).limit(1);
-
       const cohort = cohorts?.[0] || null;
       const prevCohort = prevCohorts?.[0] || null;
 
@@ -208,16 +349,12 @@ export default function TrackerApp() {
       } else {
         setActiveCohort(null); setBaseline(null); setCurrentData(null); setLogs([]);
       }
-
       if (prevCohort) {
         const { data: prevUpdates } = await supabase.from("updates").select("*").eq("cohort_id", prevCohort.id).order("updated_at", { ascending: false }).limit(1);
         setPrevWeek(prevUpdates?.[0] || null);
       }
-    } catch (e) {
-      setError("Erreur de connexion."); console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError("Erreur de connexion."); console.error(e); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -285,12 +422,15 @@ export default function TrackerApp() {
     setCopied(true); setTimeout(() => setCopied(false), 2500);
   };
 
+  if (view === "historique") return <VueHistorique onBack={() => setView("dashboard")} />;
+
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#222", fontFamily: "monospace" }}>Connexion...</div></div>;
 
   return (
     <div style={{ minHeight: "100vh", background: "#080808" }}>
       {showModal && <SwitchModal currentData={currentData} cpl={cpl} onConfirm={handleSwitch} onCancel={() => setShowModal(false)} saving={saving} />}
 
+      {/* Header */}
       <div style={{ borderBottom: "1px solid #111", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "#080808", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 34, height: 34, background: "#F5C518", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📊</div>
@@ -308,6 +448,7 @@ export default function TrackerApp() {
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px" }}>
         {error && <div style={{ background: "#1a0a0a", border: "1px solid #3a1a1a", borderRadius: 12, padding: 16, marginBottom: 20, color: "#f87171", fontFamily: "monospace", fontSize: 13 }}>⚠ {error}</div>}
 
+        {/* Barre progression */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ color: "#333", fontSize: 11, fontFamily: "monospace" }}>Semaine en cours</span>
@@ -337,7 +478,7 @@ export default function TrackerApp() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
               <Card label="Spend" value={fmt(currentData.spend)} highlight delta={currentData.spend} prev={prevWeek?.spend} />
               <Card label="Inscrits" value={fmtNum(currentData.inscrits)} delta={currentData.inscrits} prev={prevWeek?.inscrits} />
-              <Card label="CPL" value={cpl > 0 ? fmt(cpl) : "—"} delta={cpl} prev={prevCpl} />
+              <Card label="CPL" value={cpl > 0 ? fmt(cpl) : "—"} delta={cpl} prev={prevCpl} inverse />
             </div>
 
             <div style={{ background: "#0a1a0a", border: "1px solid #142014", borderRadius: 16, padding: 20, marginBottom: 24 }}>
@@ -360,12 +501,12 @@ export default function TrackerApp() {
               <div style={{ background: "#0d0d0d", border: "1px solid #161616", borderRadius: 16, padding: 20, marginBottom: 24 }}>
                 <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 14 }}>Vs semaine précédente</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                  {[{ label: "Spend", curr: currentData.spend, prev: prevWeek.spend, format: fmt }, { label: "Inscrits", curr: currentData.inscrits, prev: prevWeek.inscrits, format: fmtNum }, { label: "CPL", curr: cpl, prev: prevCpl, format: fmt }].map(({ label, curr, prev, format }) => (
+                  {[{ label: "Spend", curr: currentData.spend, prev: prevWeek.spend, format: fmt }, { label: "Inscrits", curr: currentData.inscrits, prev: prevWeek.inscrits, format: fmtNum }, { label: "CPL", curr: cpl, prev: prevCpl, format: fmt, inverse: true }].map(({ label, curr, prev, format, inverse }) => (
                     <div key={label} style={{ textAlign: "center" }}>
                       <div style={{ color: "#333", fontSize: 10, fontFamily: "monospace", marginBottom: 4 }}>{label}</div>
                       <div style={{ color: "#fff", fontWeight: 700, fontFamily: "monospace", fontSize: 13 }}>{format(curr)}</div>
                       <div style={{ color: "#2a2a2a", fontSize: 10, fontFamily: "monospace", marginBottom: 4 }}>vs {format(prev)}</div>
-                      <Delta current={curr} prev={prev} />
+                      <Delta current={curr} prev={prev} inverse={inverse} />
                     </div>
                   ))}
                 </div>
@@ -381,6 +522,18 @@ export default function TrackerApp() {
             Dernière mise à jour · {new Date(currentData.updated_at).toLocaleDateString("fr-FR")} à {new Date(currentData.updated_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
+
+        {/* Bouton Historique */}
+        <div style={{ marginTop: 40, paddingTop: 24, borderTop: "1px solid #111", textAlign: "center" }}>
+          <button
+            onClick={() => setView("historique")}
+            style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", color: "#666", borderRadius: 12, padding: "14px 32px", cursor: "pointer", fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: 1, transition: "all 0.2s" }}
+            onMouseOver={e => { e.target.style.borderColor = "#F5C518"; e.target.style.color = "#F5C518"; }}
+            onMouseOut={e => { e.target.style.borderColor = "#1e1e1e"; e.target.style.color = "#666"; }}
+          >
+            📅 Voir l'historique des semaines →
+          </button>
+        </div>
       </div>
     </div>
   );
