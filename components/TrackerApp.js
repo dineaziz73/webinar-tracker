@@ -2,8 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { getLastSwitch, getNextSwitch, formatDuration, fmt, fmtNum, pct } from "../lib/utils";
-
-// ─── Atoms ────────────────────────────────────────────────────────────────────
+import DailyStats from "./DailyStats";
 
 function Delta({ current, prev, inverse }) {
   const d = pct(current, prev);
@@ -36,8 +35,6 @@ function Card({ label, value, highlight, delta, prev, inverse }) {
   );
 }
 
-// ─── Formulaire point de départ ───────────────────────────────────────────────
-
 function BaselineForm({ onSave, saving }) {
   const [spend, setSpend] = useState("");
   const [inscrits, setInscrits] = useState("");
@@ -47,8 +44,7 @@ function BaselineForm({ onSave, saving }) {
     <div style={{ background: "#0d1500", border: "1px solid #1a3000", borderRadius: 20, padding: 24, marginBottom: 24 }}>
       <div style={{ color: "#F5C518", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8, fontWeight: 700 }}>📍 Point de départ</div>
       <p style={{ color: "#555", fontSize: 12, fontFamily: "monospace", marginBottom: 20, lineHeight: 1.7 }}>
-        Saisis les chiffres <strong style={{ color: "#888" }}>bruts affichés dans Meta</strong> au moment du switch.<br />
-        L'outil s'en servira comme référence pour calculer uniquement ce qui s'est passé depuis.
+        Saisis les chiffres <strong style={{ color: "#888" }}>bruts affichés dans Meta</strong> au moment du switch.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
@@ -67,8 +63,6 @@ function BaselineForm({ onSave, saving }) {
     </div>
   );
 }
-
-// ─── Formulaire mise à jour ───────────────────────────────────────────────────
 
 function UpdateForm({ onUpdate, currentData, baseline, saving }) {
   const [spend, setSpend] = useState("");
@@ -99,8 +93,8 @@ function UpdateForm({ onUpdate, currentData, baseline, saving }) {
 
   return (
     <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 20, padding: 24, marginBottom: 24 }}>
-      <div style={{ color: "#F5C518", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8, fontWeight: 700 }}>✏ Mettre à jour</div>
-      <p style={{ color: "#444", fontSize: 11, fontFamily: "monospace", marginBottom: 16, lineHeight: 1.6 }}>Saisis le <strong style={{ color: "#666" }}>total brut affiché dans Meta</strong> en ce moment. Le calcul depuis le switch est automatique.</p>
+      <div style={{ color: "#F5C518", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8, fontWeight: 700 }}>✏ Mise à jour globale</div>
+      <p style={{ color: "#444", fontSize: 11, fontFamily: "monospace", marginBottom: 16, lineHeight: 1.6 }}>Total brut Meta → calcul automatique depuis le switch.</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div>
           <label style={{ color: "#555", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", display: "block", marginBottom: 6 }}>Total brut Meta (CHF)</label>
@@ -122,37 +116,13 @@ function UpdateForm({ onUpdate, currentData, baseline, saving }) {
   );
 }
 
-// ─── Historique des mises à jour ─────────────────────────────────────────────
-
-function Historique({ logs }) {
-  if (!logs || logs.length === 0) return null;
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 12 }}>Historique des mises à jour</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {[...logs].reverse().slice(0, 6).map((l, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0a0a0a", border: "1px solid #141414", borderRadius: 10, padding: "10px 14px", flexWrap: "wrap", gap: 4 }}>
-            <span style={{ color: "#444", fontSize: 11, fontFamily: "monospace" }}>
-              {new Date(l.updated_at).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} {new Date(l.updated_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-              {l.note && <span style={{ color: "#2a2a2a", marginLeft: 8 }}>— {l.note}</span>}
-            </span>
-            <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{fmt(l.spend)} · {fmtNum(l.inscrits)} inscrits</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Modal Switch ─────────────────────────────────────────────────────────────
-
 function SwitchModal({ currentData, cpl, onConfirm, onCancel, saving }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ background: "#111", border: "1px solid #222", borderRadius: 20, padding: 32, maxWidth: 400, width: "100%" }}>
         <div style={{ fontSize: 32, marginBottom: 16 }}>🔄</div>
         <h2 style={{ color: "#fff", fontFamily: "monospace", margin: "0 0 12px", fontSize: 20 }}>Confirmer le switch ?</h2>
-        <p style={{ color: "#555", fontSize: 14, lineHeight: 1.7, margin: "0 0 24px" }}>La semaine actuelle sera archivée. Tu devras saisir un nouveau point de départ.</p>
+        <p style={{ color: "#555", fontSize: 14, lineHeight: 1.7, margin: "0 0 24px" }}>La semaine actuelle sera archivée avec un compte rendu automatique visible par le client.</p>
         {currentData && (
           <div style={{ background: "#0d0d0d", borderRadius: 12, padding: 16, marginBottom: 24 }}>
             <div style={{ color: "#555", fontSize: 11, fontFamily: "monospace", marginBottom: 8 }}>Résumé de la semaine :</div>
@@ -168,33 +138,18 @@ function SwitchModal({ currentData, cpl, onConfirm, onCancel, saving }) {
   );
 }
 
-// ─── Vue Historique Cohortes ──────────────────────────────────────────────────
-
 function VueHistorique({ onBack }) {
   const [cohortes, setCohortes] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      // Charger toutes les cohortes inactives + active
-      const { data: allCohorts } = await supabase
-        .from("cohorts")
-        .select("*")
-        .order("created_at", { ascending: false });
-
+      const { data: allCohorts } = await supabase.from("cohorts").select("*").order("created_at", { ascending: false });
       if (!allCohorts) { setLoading(false); return; }
-
-      // Pour chaque cohorte, récupérer le dernier update
       const enriched = await Promise.all(allCohorts.map(async (c) => {
-        const { data: updates } = await supabase
-          .from("updates")
-          .select("*")
-          .eq("cohort_id", c.id)
-          .order("updated_at", { ascending: false })
-          .limit(1);
+        const { data: updates } = await supabase.from("updates").select("*").eq("cohort_id", c.id).order("updated_at", { ascending: false }).limit(1);
         return { ...c, lastUpdate: updates?.[0] || null };
       }));
-
       setCohortes(enriched);
       setLoading(false);
     })();
@@ -204,69 +159,23 @@ function VueHistorique({ onBack }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#080808" }}>
-      {/* Header */}
       <div style={{ borderBottom: "1px solid #111", padding: "18px 24px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, background: "#080808", zIndex: 10 }}>
         <button onClick={onBack} style={{ background: "#111", border: "1px solid #1e1e1e", color: "#888", borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontFamily: "monospace" }}>← Retour</button>
         <div>
           <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, fontFamily: "monospace" }}>Historique des semaines</div>
-          <div style={{ color: "#2a2a2a", fontSize: 10, fontFamily: "monospace" }}>{withData.length} semaine{withData.length > 1 ? "s" : ""} archivée{withData.length > 1 ? "s" : ""}</div>
+          <div style={{ color: "#2a2a2a", fontSize: 10, fontFamily: "monospace" }}>{withData.length} semaine{withData.length > 1 ? "s" : ""}</div>
         </div>
       </div>
-
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px" }}>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Chargement...</div>
-        ) : withData.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Aucune semaine archivée pour l'instant.</div>
-        ) : (
-          <>
-            {/* Tableau récap */}
-            <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 16, overflow: "hidden", marginBottom: 32 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "12px 16px", borderBottom: "1px solid #1a1a1a" }}>
-                {["Semaine", "Spend", "Inscrits", "CPL"].map(h => (
-                  <div key={h} style={{ color: "#333", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 700 }}>{h}</div>
-                ))}
-              </div>
-              {withData.map((c, i) => {
-                const next = withData[i + 1];
-                const cpl = c.lastUpdate?.spend > 0 && c.lastUpdate?.inscrits > 0 ? c.lastUpdate.spend / c.lastUpdate.inscrits : 0;
-                const prevCpl = next?.lastUpdate?.spend > 0 && next?.lastUpdate?.inscrits > 0 ? next.lastUpdate.spend / next.lastUpdate.inscrits : 0;
-                const start = new Date(c.created_at);
-                const end = new Date(start); end.setDate(end.getDate() + 7);
-                const label = `${start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} → ${end.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`;
-                return (
-                  <div key={c.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "14px 16px", borderBottom: i < withData.length - 1 ? "1px solid #111" : "none", background: c.active ? "rgba(245,197,24,0.04)" : "transparent" }}>
-                    <div>
-                      <div style={{ color: c.active ? "#F5C518" : "#fff", fontSize: 12, fontFamily: "monospace", fontWeight: 700 }}>{label}</div>
-                      {c.active && <span style={{ fontSize: 9, color: "#F5C518", background: "rgba(245,197,24,0.1)", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace", letterSpacing: 1 }}>EN COURS</span>}
-                    </div>
-                    <div>
-                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{fmt(c.lastUpdate?.spend || 0)}</div>
-                      {next?.lastUpdate && <Delta current={c.lastUpdate?.spend} prev={next.lastUpdate?.spend} />}
-                    </div>
-                    <div>
-                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{fmtNum(c.lastUpdate?.inscrits || 0)}</div>
-                      {next?.lastUpdate && <Delta current={c.lastUpdate?.inscrits} prev={next.lastUpdate?.inscrits} />}
-                    </div>
-                    <div>
-                      <div style={{ color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>{cpl > 0 ? fmt(cpl) : "—"}</div>
-                      {next?.lastUpdate && prevCpl > 0 && <Delta current={cpl} prev={prevCpl} inverse />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Cards détail par semaine */}
-            <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 16 }}>Détail par semaine</div>
+        {loading ? <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Chargement...</div>
+          : withData.length === 0 ? <div style={{ textAlign: "center", padding: 60, color: "#222", fontFamily: "monospace" }}>Aucune semaine archivée.</div>
+          : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {withData.map((c, i) => {
                 const next = withData[i + 1];
                 const cpl = c.lastUpdate?.spend > 0 && c.lastUpdate?.inscrits > 0 ? c.lastUpdate.spend / c.lastUpdate.inscrits : 0;
                 const prevCpl = next?.lastUpdate?.spend > 0 && next?.lastUpdate?.inscrits > 0 ? next.lastUpdate.spend / next.lastUpdate.inscrits : 0;
                 const start = new Date(c.created_at);
-                const end = new Date(start); end.setDate(end.getDate() + 7);
-
                 return (
                   <div key={c.id} style={{ background: "#0d0d0d", border: c.active ? "1px solid #2a2a00" : "1px solid #1a1a1a", borderRadius: 16, padding: 20 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -274,15 +183,10 @@ function VueHistorique({ onBack }) {
                         <div style={{ color: c.active ? "#F5C518" : "#fff", fontWeight: 800, fontFamily: "monospace", fontSize: 14 }}>
                           {start.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
                         </div>
-                        <div style={{ color: "#333", fontSize: 11, fontFamily: "monospace", marginTop: 2 }}>
-                          → {end.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} 17h00
-                        </div>
+                        <div style={{ color: "#333", fontSize: 11, fontFamily: "monospace", marginTop: 2 }}>17h00 → {c.active ? "en cours" : "switch suivant"}</div>
                       </div>
-                      {c.active && (
-                        <span style={{ fontSize: 10, color: "#F5C518", background: "rgba(245,197,24,0.1)", padding: "4px 10px", borderRadius: 6, fontFamily: "monospace", letterSpacing: 1, fontWeight: 700 }}>EN COURS</span>
-                      )}
+                      {c.active && <span style={{ fontSize: 10, color: "#F5C518", background: "rgba(245,197,24,0.1)", padding: "4px 10px", borderRadius: 6, fontFamily: "monospace", letterSpacing: 1, fontWeight: 700 }}>EN COURS</span>}
                     </div>
-
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                       {[
                         { label: "Spend", value: fmt(c.lastUpdate?.spend || 0), curr: c.lastUpdate?.spend, prev: next?.lastUpdate?.spend },
@@ -296,25 +200,18 @@ function VueHistorique({ onBack }) {
                         </div>
                       ))}
                     </div>
-
-                    {c.lastUpdate?.note && (
-                      <div style={{ marginTop: 12, color: "#444", fontSize: 11, fontFamily: "monospace" }}>📝 {c.lastUpdate.note}</div>
-                    )}
                   </div>
                 );
               })}
             </div>
-          </>
-        )}
+          )}
       </div>
     </div>
   );
 }
 
-// ─── App principale ───────────────────────────────────────────────────────────
-
 export default function TrackerApp() {
-  const [view, setView] = useState("dashboard"); // "dashboard" | "historique"
+  const [view, setView] = useState("dashboard");
   const [currentData, setCurrentData] = useState(null);
   const [baseline, setBaseline] = useState(null);
   const [prevWeek, setPrevWeek] = useState(null);
@@ -326,6 +223,7 @@ export default function TrackerApp() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showDaily, setShowDaily] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000);
@@ -339,7 +237,6 @@ export default function TrackerApp() {
       const { data: prevCohorts } = await supabase.from("cohorts").select("*").eq("active", false).order("created_at", { ascending: false }).limit(1);
       const cohort = cohorts?.[0] || null;
       const prevCohort = prevCohorts?.[0] || null;
-
       if (cohort) {
         setActiveCohort(cohort);
         setBaseline({ baseline_spend: cohort.baseline_spend ?? null, baseline_inscrits: cohort.baseline_inscrits ?? null });
@@ -423,14 +320,12 @@ export default function TrackerApp() {
   };
 
   if (view === "historique") return <VueHistorique onBack={() => setView("dashboard")} />;
-
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#222", fontFamily: "monospace" }}>Connexion...</div></div>;
 
   return (
     <div style={{ minHeight: "100vh", background: "#080808" }}>
       {showModal && <SwitchModal currentData={currentData} cpl={cpl} onConfirm={handleSwitch} onCancel={() => setShowModal(false)} saving={saving} />}
 
-      {/* Header */}
       <div style={{ borderBottom: "1px solid #111", padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "#080808", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 34, height: 34, background: "#F5C518", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📊</div>
@@ -448,7 +343,6 @@ export default function TrackerApp() {
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px" }}>
         {error && <div style={{ background: "#1a0a0a", border: "1px solid #3a1a1a", borderRadius: 12, padding: 16, marginBottom: 20, color: "#f87171", fontFamily: "monospace", fontSize: 13 }}>⚠ {error}</div>}
 
-        {/* Barre progression */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ color: "#333", fontSize: 11, fontFamily: "monospace" }}>Semaine en cours</span>
@@ -512,24 +406,29 @@ export default function TrackerApp() {
                 </div>
               </div>
             )}
-
-            <Historique logs={logs} />
           </>
         )}
 
-        {currentData?.updated_at && (
-          <div style={{ textAlign: "center", marginTop: 32, color: "#181818", fontSize: 10, fontFamily: "monospace" }}>
-            Dernière mise à jour · {new Date(currentData.updated_at).toLocaleDateString("fr-FR")} à {new Date(currentData.updated_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+        {/* Section données journalières */}
+        {activeCohort?.id && (
+          <div style={{ marginBottom: 24 }}>
+            <button
+              onClick={() => setShowDaily(!showDaily)}
+              style={{ width: "100%", background: "#0d0d0d", border: "1px solid #1e1e1e", color: showDaily ? "#F5C518" : "#666", borderRadius: 12, padding: "14px 20px", cursor: "pointer", fontSize: 12, fontFamily: "monospace", fontWeight: 700, letterSpacing: 1, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showDaily ? 12 : 0 }}
+            >
+              <span>📅 Données journalières</span>
+              <span>{showDaily ? "▲" : "▼"}</span>
+            </button>
+            {showDaily && (
+              <DailyStats cohortId={activeCohort.id} switchDate={activeCohort.created_at} />
+            )}
           </div>
         )}
 
-        {/* Bouton Historique */}
-        <div style={{ marginTop: 40, paddingTop: 24, borderTop: "1px solid #111", textAlign: "center" }}>
+        <div style={{ marginTop: 16, paddingTop: 24, borderTop: "1px solid #111", textAlign: "center" }}>
           <button
             onClick={() => setView("historique")}
-            style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", color: "#666", borderRadius: 12, padding: "14px 32px", cursor: "pointer", fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: 1, transition: "all 0.2s" }}
-            onMouseOver={e => { e.target.style.borderColor = "#F5C518"; e.target.style.color = "#F5C518"; }}
-            onMouseOut={e => { e.target.style.borderColor = "#1e1e1e"; e.target.style.color = "#666"; }}
+            style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", color: "#666", borderRadius: 12, padding: "14px 32px", cursor: "pointer", fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: 1 }}
           >
             📅 Voir l'historique des semaines →
           </button>
